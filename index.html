@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sudoku Generator v3 — Puzzle Book Engine</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --ink: #262626;
+    --ink-soft: #5b5b5b;
+    --accent: #c0392b;
+    --accent-dark: #9b2f22;
+    --accent-tint: #fbeae7;
+    --offwhite: #fbfaf9;
+    --rule: #dcdcdc;
+    --white: #ffffff;
+    --font-head: Georgia, Cambria, 'Times New Roman', serif;
+    --font-body: Calibri, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font-body); color: var(--ink); background: var(--white); }
+  .app { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 320px; flex-shrink: 0; background: var(--offwhite);
+    border-right: 1px solid var(--rule); padding: 28px 24px 40px;
+  }
+  .main { flex: 1; padding: 28px 32px 60px; min-width: 0; }
+
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .brand svg { flex-shrink: 0; }
+  .brand-name { font-family: var(--font-head); font-weight: bold; font-size: 18px; color: var(--ink); }
+  .brand-sub { font-size: 11.5px; color: var(--ink-soft); margin: 0 0 26px; letter-spacing: .02em; }
+
+  fieldset { border: none; padding: 0; margin: 0 0 22px; }
+  legend {
+    font-size: 11px; font-weight: bold; color: var(--accent); text-transform: uppercase;
+    letter-spacing: .08em; margin-bottom: 10px; padding: 0;
+  }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 5px; }
+  .field input[type="text"], .field input[type="number"], .field select {
+    width: 100%; padding: 8px 10px; font-size: 13.5px; font-family: var(--font-body);
+    color: var(--ink); background: var(--white); border: 1px solid var(--rule); border-radius: 4px;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+  .checkbox-field { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .checkbox-field input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .checkbox-field label { font-size: 12.5px; color: var(--ink); margin: 0; }
+  .hint { font-size: 11px; color: var(--ink-soft); margin-top: 4px; line-height: 1.4; }
+
+  /* grid-size picker: visual tiles instead of a plain select, since the
+     board shape itself is the thing being chosen */
+  .size-options { display: flex; flex-direction: column; gap: 8px; }
+  .size-option {
+    display: flex; align-items: center; gap: 12px; padding: 9px 10px;
+    border: 1px solid var(--rule); border-radius: 5px; cursor: pointer; background: var(--white);
+  }
+  .size-option.active { border-color: var(--accent); background: var(--accent-tint); }
+  .size-option input { accent-color: var(--accent); margin: 0; flex-shrink: 0; }
+  .size-option .swatch {
+    flex-shrink: 0; width: 34px; height: 34px; border: 1.3px solid var(--ink); background: var(--white);
+  }
+  .size-option .swatch-cell {
+    border-right: 0.5px solid #ccc; border-bottom: 0.5px solid #ccc;
+  }
+  .size-option .swatch-cell.thick-r { border-right: 1.3px solid var(--ink); }
+  .size-option .swatch-cell.thick-b { border-bottom: 1.3px solid var(--ink); }
+  .size-option .text b { display: block; font-size: 13px; color: var(--ink); }
+  .size-option .text span { display: block; font-size: 10.5px; color: var(--ink-soft); margin-top: 1px; }
+
+  .btn {
+    width: 100%; padding: 11px; font-size: 13.5px; font-weight: 600; font-family: var(--font-body);
+    border-radius: 4px; cursor: pointer; border: 1px solid transparent; transition: opacity .15s;
+  }
+  .btn:disabled { cursor: not-allowed; opacity: .45; }
+  .btn-primary { background: var(--accent); color: var(--white); margin-bottom: 10px; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-dark); }
+  .btn-secondary { background: var(--white); color: var(--accent); border-color: var(--accent); }
+  .btn-secondary:hover:not(:disabled) { background: var(--accent-tint); }
+
+  .progress-wrap { margin-top: 14px; display: none; }
+  .progress-wrap.active { display: block; }
+  .progress-bar-track { height: 6px; background: var(--rule); border-radius: 3px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; width: 0%; background: var(--accent); transition: width .2s; }
+  .progress-label { font-size: 11.5px; color: var(--ink-soft); margin-top: 6px; }
+
+  .main-header { margin-bottom: 22px; }
+  .main-title { font-family: var(--font-head); font-size: 24px; font-weight: bold; margin: 0 0 4px; }
+  .main-sub { font-size: 13px; color: var(--ink-soft); margin: 0; }
+
+  .stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 24px; }
+  .stat-chip {
+    background: var(--offwhite); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 8px 14px; font-size: 12px; color: var(--ink-soft);
+  }
+  .stat-chip b { color: var(--ink); font-size: 13.5px; }
+
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 90px 20px; color: var(--ink-soft);
+  }
+  .empty-state svg { margin-bottom: 18px; opacity: .5; }
+  .empty-state p { max-width: 380px; font-size: 13.5px; line-height: 1.6; margin: 0; }
+
+  .preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; }
+  .puzzle-card { border: 1px solid var(--rule); border-radius: 4px; padding: 12px; background: var(--white); }
+  .puzzle-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .puzzle-num { font-size: 12px; font-weight: bold; color: var(--accent); }
+  .puzzle-diff { font-size: 10.5px; color: var(--ink-soft); }
+  .mini-grid {
+    display: grid; width: 100%; aspect-ratio: 1; border: 1.5px solid var(--ink); background: var(--white);
+  }
+  .mini-cell {
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(7px, 1.7vw, 12px); font-weight: 700; color: var(--ink);
+  }
+  .more-note {
+    grid-column: 1 / -1; text-align: center; font-size: 12px; color: var(--ink-soft);
+    padding: 10px; border: 1px dashed var(--rule); border-radius: 4px;
+  }
+
+  @media (max-width: 820px) {
+    .app { flex-direction: column; }
+    .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--rule); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <rect x="1" y="1" width="24" height="24" stroke="#c0392b" stroke-width="1.4"/>
+        <line x1="9" y1="1" x2="9" y2="25" stroke="#c0392b" stroke-width="1"/>
+        <line x1="17" y1="1" x2="17" y2="25" stroke="#c0392b" stroke-width="1"/>
+        <line x1="1" y1="9" x2="25" y2="9" stroke="#c0392b" stroke-width="1"/>
+        <line x1="1" y1="17" x2="25" y2="17" stroke="#c0392b" stroke-width="1"/>
+      </svg>
+      <span class="brand-name">Puzzle Book Engine</span>
+    </div>
+    <p class="brand-sub">Sudoku Generator v3 &mdash; kini dengan ukuran kertas A5 &amp; pilihan ukuran huruf.</p>
+
+    <fieldset>
+      <legend>Ukuran Grid</legend>
+      <div class="size-options" id="sizeOptions"><!-- filled by JS --></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Informasi Buku</legend>
+      <div class="field">
+        <label for="bookTitle">Judul Buku</label>
+        <input type="text" id="bookTitle" value="Kumpulan Sudoku" />
+      </div>
+      <div class="field">
+        <label for="bookSubtitle">Subjudul / Catatan</label>
+        <input type="text" id="bookSubtitle" value="Latihan logika setiap hari" />
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Pengaturan Puzzle</legend>
+      <div class="field">
+        <label for="puzzleCount">Jumlah Puzzle</label>
+        <input type="number" id="puzzleCount" value="12" min="1" max="300" />
+        <div class="hint">Disarankan ≤100 untuk tingkat Expert agar proses pembuatan tetap cepat.</div>
+      </div>
+      <div class="field">
+        <label for="difficulty">Tingkat Kesulitan</label>
+        <select id="difficulty">
+          <option value="easy">Easy</option>
+          <option value="medium" selected>Medium</option>
+          <option value="hard">Hard</option>
+          <option value="expert">Expert</option>
+          <option value="mixed">Campur Semua Tingkat</option>
+        </select>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Layout Halaman</legend>
+      <div class="field">
+        <label for="perPage">Puzzle per Halaman</label>
+        <select id="perPage">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="4" selected>4</option>
+          <option value="6">6</option>
+          <option value="9">9</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="pageSize">Ukuran Halaman</label>
+        <select id="pageSize">
+          <option value="a4" selected>A4</option>
+          <option value="a5">A5</option>
+          <option value="letter">Letter</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="fontSize">Ukuran Huruf</label>
+        <select id="fontSize">
+          <option value="normal" selected>Normal</option>
+          <option value="large">Besar</option>
+          <option value="xlarge">Ekstra Besar</option>
+        </select>
+        <div class="hint">Pilih \u201CBesar\u201D atau \u201CEkstra Besar\u201D untuk buku anak-anak (grid 4\u00D74) agar angka lebih mudah dibaca.</div>
+      </div>
+      <div class="checkbox-field">
+        <input type="checkbox" id="includeSolutions" checked />
+        <label for="includeSolutions">Sertakan halaman solusi</label>
+      </div>
+    </fieldset>
+
+    <button class="btn btn-primary" id="generateBtn">Generate Puzzle</button>
+    <button class="btn btn-secondary" id="downloadBtn" disabled>Download PDF</button>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">Membuat puzzle…</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="main-header">
+      <h1 class="main-title">Pratinjau Puzzle</h1>
+      <p class="main-sub">Generator → Solver (cek solusi unik) → Difficulty Engine → Layout Engine → PDF Engine</p>
+    </div>
+
+    <div id="statsRow" class="stats-row" style="display:none;"></div>
+    <div id="content">
+      <div class="empty-state" id="emptyState">
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+          <rect x="2" y="2" width="60" height="60" stroke="#dcdcdc" stroke-width="2"/>
+          <line x1="22" y1="2" x2="22" y2="62" stroke="#dcdcdc" stroke-width="1.5"/>
+          <line x1="42" y1="2" x2="42" y2="62" stroke="#dcdcdc" stroke-width="1.5"/>
+          <line x1="2" y1="22" x2="62" y2="22" stroke="#dcdcdc" stroke-width="1.5"/>
+          <line x1="2" y1="42" x2="62" y2="42" stroke="#dcdcdc" stroke-width="1.5"/>
+        </svg>
+        <p>Pilih ukuran grid di sebelah kiri — 4×4 untuk pemula, 6×6 untuk menengah, atau 9×9 klasik — lalu klik <b>Generate Puzzle</b>. Setiap puzzle dijamin memiliki satu solusi unik.</p>
+      </div>
+      <div class="preview-grid" id="previewGrid" style="display:none;"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ============================================================
+// 1. ENGINE — Generator + Solver (uniqueness checker), generalized
+//    to support any boxRows x boxCols board (N = boxRows * boxCols).
+// ============================================================
+var BOARD_CONFIGS = {
+  "4x4": {
+    key: "4x4", N: 4, boxRows: 2, boxCols: 2,
+    label: "4\u00D74", boxLabel: "kotak 2\u00D72",
+    sublabel: "Paling sederhana \u2014 cocok untuk anak-anak / pemula",
+    givens: { easy: 13, medium: 11, hard: 9, expert: 6 },
+  },
+  "6x6": {
+    key: "6x6", N: 6, boxRows: 2, boxCols: 3,
+    label: "6\u00D76", boxLabel: "kotak 2\u00D73",
+    sublabel: "Tingkat menengah \u2014 jembatan sebelum 9\u00D79",
+    givens: { easy: 24, medium: 20, hard: 16, expert: 12 },
+  },
+  "9x9": {
+    key: "9x9", N: 9, boxRows: 3, boxCols: 3,
+    label: "9\u00D79", boxLabel: "kotak 3\u00D73",
+    sublabel: "Klasik \u2014 standar Sudoku pada umumnya",
+    givens: { easy: 40, medium: 32, hard: 27, expert: 23 },
+  },
+};
+var BOARD_ORDER = ["4x4", "6x6", "9x9"];
+
+function emptyGrid(N) {
+  return Array.from({ length: N }, function () { return Array(N).fill(0); });
+}
+
+function isSafe(grid, row, col, num, N, boxRows, boxCols) {
+  for (var i = 0; i < N; i++) {
+    if (grid[row][i] === num || grid[i][col] === num) return false;
+  }
+  var br = row - (row % boxRows), bc = col - (col % boxCols);
+  for (var r = 0; r < boxRows; r++) {
+    for (var c = 0; c < boxCols; c++) {
+      if (grid[br + r][bc + c] === num) return false;
+    }
+  }
+  return true;
+}
+
+function shuffle(arr) {
+  for (var i = arr.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+  }
+  return arr;
+}
+
+function fillGrid(grid, N, boxRows, boxCols) {
+  var total = N * N;
+  for (var pos = 0; pos < total; pos++) {
+    var row = Math.floor(pos / N), col = pos % N;
+    if (grid[row][col] !== 0) continue;
+    var nums = shuffle(Array.from({ length: N }, function (_, i) { return i + 1; }));
+    for (var k = 0; k < nums.length; k++) {
+      var num = nums[k];
+      if (isSafe(grid, row, col, num, N, boxRows, boxCols)) {
+        grid[row][col] = num;
+        if (fillGrid(grid, N, boxRows, boxCols)) return true;
+        grid[row][col] = 0;
+      }
+    }
+    return false;
+  }
+  return true;
+}
+
+function generateSolvedGrid(boardKey) {
+  var cfg = BOARD_CONFIGS[boardKey];
+  var grid = emptyGrid(cfg.N);
+  fillGrid(grid, cfg.N, cfg.boxRows, cfg.boxCols);
+  return grid;
+}
+
+function countSolutions(grid, N, boxRows, boxCols, limit) {
+  if (limit === undefined) limit = 2;
+  var count = 0;
+
+  function candidatesFor(r, c) {
+    var used = new Array(N + 1).fill(false);
+    for (var i = 0; i < N; i++) {
+      used[grid[r][i]] = true;
+      used[grid[i][c]] = true;
+    }
+    var br = r - (r % boxRows), bc = c - (c % boxCols);
+    for (var i2 = 0; i2 < boxRows; i2++) {
+      for (var j2 = 0; j2 < boxCols; j2++) used[grid[br + i2][bc + j2]] = true;
+    }
+    var out = [];
+    for (var n = 1; n <= N; n++) if (!used[n]) out.push(n);
+    return out;
+  }
+
+  function backtrack() {
+    if (count >= limit) return;
+    var bestR = -1, bestC = -1, bestCands = null;
+    outer:
+    for (var r = 0; r < N; r++) {
+      for (var c = 0; c < N; c++) {
+        if (grid[r][c] !== 0) continue;
+        var cands = candidatesFor(r, c);
+        if (cands.length === 0) return;
+        if (bestCands === null || cands.length < bestCands.length) {
+          bestR = r; bestC = c; bestCands = cands;
+          if (cands.length === 1) break outer;
+        }
+      }
+    }
+    if (bestR === -1) { count++; return; }
+    for (var k = 0; k < bestCands.length; k++) {
+      if (count >= limit) return;
+      grid[bestR][bestC] = bestCands[k];
+      backtrack();
+      grid[bestR][bestC] = 0;
+    }
+  }
+
+  backtrack();
+  return count;
+}
+
+function cloneGrid(grid) { return grid.map(function (row) { return row.slice(); }); }
+
+function carvePuzzle(solvedGrid, boardKey, difficulty) {
+  var cfg = BOARD_CONFIGS[boardKey];
+  var N = cfg.N, boxRows = cfg.boxRows, boxCols = cfg.boxCols;
+  var puzzle = cloneGrid(solvedGrid);
+  var targetGivens = cfg.givens[difficulty] || cfg.givens.medium;
+  var cells = shuffle(Array.from({ length: N * N }, function (_, i) { return [Math.floor(i / N), i % N]; }));
+
+  var givens = N * N;
+  for (var k = 0; k < cells.length; k++) {
+    if (givens <= targetGivens) break;
+    var r = cells[k][0], c = cells[k][1];
+    var backup = puzzle[r][c];
+    if (backup === 0) continue;
+    puzzle[r][c] = 0;
+    var testGrid = cloneGrid(puzzle);
+    var solutions = countSolutions(testGrid, N, boxRows, boxCols, 2);
+    if (solutions !== 1) {
+      puzzle[r][c] = backup;
+    } else {
+      givens--;
+    }
+  }
+  return { puzzle: puzzle, givens: givens };
+}
+
+function generatePuzzle(boardKey, difficulty) {
+  var solution = generateSolvedGrid(boardKey);
+  var carved = carvePuzzle(solution, boardKey, difficulty);
+  return { puzzle: carved.puzzle, solution: solution, givens: carved.givens, difficulty: difficulty, boardKey: boardKey };
+}
+
+var MIXED_CYCLE = ["easy", "medium", "hard", "expert"];
+function pickDifficulty(mode, index) {
+  if (mode !== "mixed") return mode;
+  return MIXED_CYCLE[index % MIXED_CYCLE.length];
+}
+
+// ============================================================
+// 2. PDF / LAYOUT ENGINE — generalized for N x N boards
+// ============================================================
+var INK = [38, 38, 38];
+var INK_SOFT = [91, 91, 91];
+var ACCENT = [192, 57, 43];
+var RULE = [220, 220, 220];
+
+var LAYOUTS = {
+  1: { cols: 1, rows: 1 },
+  2: { cols: 1, rows: 2 },
+  4: { cols: 2, rows: 2 },
+  6: { cols: 2, rows: 3 },
+  9: { cols: 3, rows: 3 },
+};
+
+var DIFFICULTY_LABEL = { easy: "Easy", medium: "Medium", hard: "Hard", expert: "Expert" };
+
+// User-facing font-size multiplier, applied on top of the auto-computed
+// per-cell size — lets people deliberately go bigger (e.g. kids' 4x4
+// books) regardless of how many puzzles are packed per page.
+var FONT_SCALES = { normal: 1.0, large: 1.18, xlarge: 1.38 };
+
+function drawSudokuGrid(doc, x, y, size, grid, cfg, opts) {
+  opts = opts || {};
+  var N = cfg.N, boxRows = cfg.boxRows, boxCols = cfg.boxCols;
+  var cell = size / N;
+  var scale = FONT_SCALES[opts.fontScale] || 1.0;
+  doc.setFont("helvetica", opts.bold === false ? "normal" : "bold");
+  for (var r = 0; r < N; r++) {
+    for (var c = 0; c < N; c++) {
+      var v = grid[r][c];
+      if (v === 0) continue;
+      var sizeFactor = v >= 10 ? 1.55 : 2.15;
+      doc.setFontSize(cell * sizeFactor * scale);
+      doc.setTextColor(INK[0], INK[1], INK[2]);
+      doc.text(String(v), x + c * cell + cell / 2, y + r * cell + cell / 2, { align: "center", baseline: "middle" });
+    }
+  }
+  for (var i = 0; i <= N; i++) {
+    var thickV = i % boxCols === 0;
+    doc.setLineWidth(thickV ? 0.6 : 0.15);
+    doc.setDrawColor(INK[0], INK[1], INK[2]);
+    doc.line(x + i * cell, y, x + i * cell, y + size);
+  }
+  for (var j = 0; j <= N; j++) {
+    var thickH = j % boxRows === 0;
+    doc.setLineWidth(thickH ? 0.6 : 0.15);
+    doc.setDrawColor(INK[0], INK[1], INK[2]);
+    doc.line(x, y + j * cell, x + size, y + j * cell);
+  }
+}
+
+function drawRunningHeader(doc, pageW, margin, title) {
+  doc.setFont("times", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(INK_SOFT[0], INK_SOFT[1], INK_SOFT[2]);
+  doc.text(title, margin, margin - 5);
+  doc.setDrawColor(RULE[0], RULE[1], RULE[2]);
+  doc.setLineWidth(0.25);
+  doc.line(margin, margin - 2, pageW - margin, margin - 2);
+}
+
+function drawFooter(doc, pageW, pageH, margin, pageNum) {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(INK_SOFT[0], INK_SOFT[1], INK_SOFT[2]);
+  doc.text(String(pageNum), pageW - margin, pageH - margin + 6, { align: "right" });
+  doc.text("Puzzle Book Engine", margin, pageH - margin + 6);
+}
+
+function layoutPages(doc, items, kind, perPage, pageW, pageH, margin, title, pageCounter, cfg, fontScale) {
+  var layout = LAYOUTS[perPage];
+  var contentTop = margin + 4;
+  var contentW = pageW - margin * 2;
+  var contentH = pageH - margin - contentTop;
+  var gap = perPage >= 6 ? 5 : 7;
+  var labelH = 6;
+
+  var boxW = (contentW - (layout.cols - 1) * gap) / layout.cols;
+  var boxH = (contentH - (layout.rows - 1) * gap) / layout.rows;
+  var gridSize = Math.min(boxW, boxH - labelH);
+
+  var idx = 0;
+  while (idx < items.length) {
+    drawRunningHeader(doc, pageW, margin, title);
+    for (var i = 0; i < layout.rows && idx < items.length; i++) {
+      for (var j = 0; j < layout.cols && idx < items.length; j++) {
+        var item = items[idx];
+        var boxX = margin + j * (boxW + gap);
+        var boxY = contentTop + i * (boxH + gap);
+        var gx = boxX + (boxW - gridSize) / 2;
+        var gy = boxY + labelH;
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2]);
+        var numText = (kind === "solution" ? "Solusi #" : "No. ") + item.number;
+        doc.text(numText, gx, boxY + 4);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(INK_SOFT[0], INK_SOFT[1], INK_SOFT[2]);
+        doc.text(DIFFICULTY_LABEL[item.difficulty] || item.difficulty, gx + gridSize, boxY + 4, { align: "right" });
+
+        drawSudokuGrid(doc, gx, gy, gridSize, kind === "solution" ? item.solution : item.puzzle, cfg, { bold: kind !== "solution", fontScale: fontScale });
+        idx++;
+      }
+    }
+    drawFooter(doc, pageW, pageH, margin, pageCounter.n);
+    pageCounter.n++;
+    if (idx < items.length) doc.addPage();
+  }
+}
+
+function drawCover(doc, pageW, pageH, title, subtitle, count, difficultyText, cfg) {
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, pageW, pageH, "F");
+
+  var gx = pageW - 55, gy = 25, gsize = 32;
+  doc.setDrawColor(RULE[0], RULE[1], RULE[2]);
+  doc.setLineWidth(0.5);
+  for (var i = 0; i <= cfg.boxCols; i++) {
+    doc.line(gx + (gsize / cfg.boxCols) * i, gy, gx + (gsize / cfg.boxCols) * i, gy + gsize);
+  }
+  for (var j = 0; j <= cfg.boxRows; j++) {
+    doc.line(gx, gy + (gsize / cfg.boxRows) * j, gx + gsize, gy + (gsize / cfg.boxRows) * j);
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2]);
+  doc.text("PUZZLE BOOK ENGINE", 20, pageH / 2 - 28);
+
+  doc.setFont("times", "bold");
+  doc.setFontSize(26);
+  doc.setTextColor(INK[0], INK[1], INK[2]);
+  doc.text(title, 20, pageH / 2 - 12, { maxWidth: pageW - 40 });
+
+  doc.setFont("times", "italic");
+  doc.setFontSize(13);
+  doc.setTextColor(INK_SOFT[0], INK_SOFT[1], INK_SOFT[2]);
+  doc.text(subtitle || "", 20, pageH / 2 + 4, { maxWidth: pageW - 40 });
+
+  doc.setDrawColor(ACCENT[0], ACCENT[1], ACCENT[2]);
+  doc.setLineWidth(0.8);
+  doc.line(20, pageH / 2 + 14, 48, pageH / 2 + 14);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(INK_SOFT[0], INK_SOFT[1], INK_SOFT[2]);
+  doc.text(count + " puzzle  \u00B7  " + cfg.label + " (" + cfg.boxLabel + ")  \u00B7  " + difficultyText, 20, pageH / 2 + 26);
+}
+
+function buildBookPdf(opts) {
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF({ unit: "mm", format: opts.pageSize });
+  var pageW = doc.internal.pageSize.getWidth();
+  var pageH = doc.internal.pageSize.getHeight();
+  var margin = opts.pageSize === "a5" ? 12 : 16;
+  var pageCounter = { n: 1 };
+
+  drawCover(doc, pageW, pageH, opts.title, opts.subtitle, opts.puzzles.length, opts.difficultyText, opts.cfg);
+
+  doc.addPage();
+  pageCounter.n = 1;
+  layoutPages(doc, opts.puzzles, "puzzle", opts.perPage, pageW, pageH, margin, opts.title, pageCounter, opts.cfg, opts.fontScale);
+
+  if (opts.includeSolutions) {
+    doc.addPage();
+    layoutPages(doc, opts.puzzles, "solution", opts.perPage, pageW, pageH, margin, opts.title + " \u2014 Solusi", pageCounter, opts.cfg, opts.fontScale);
+  }
+
+  return doc;
+}
+
+// ============================================================
+// 3. UI
+// ============================================================
+var state = { puzzles: [], generating: false, boardKey: "9x9" };
+
+var els = {
+  bookTitle: document.getElementById("bookTitle"),
+  bookSubtitle: document.getElementById("bookSubtitle"),
+  puzzleCount: document.getElementById("puzzleCount"),
+  difficulty: document.getElementById("difficulty"),
+  perPage: document.getElementById("perPage"),
+  pageSize: document.getElementById("pageSize"),
+  fontSize: document.getElementById("fontSize"),
+  includeSolutions: document.getElementById("includeSolutions"),
+  generateBtn: document.getElementById("generateBtn"),
+  downloadBtn: document.getElementById("downloadBtn"),
+  progressWrap: document.getElementById("progressWrap"),
+  progressFill: document.getElementById("progressFill"),
+  progressLabel: document.getElementById("progressLabel"),
+  statsRow: document.getElementById("statsRow"),
+  emptyState: document.getElementById("emptyState"),
+  previewGrid: document.getElementById("previewGrid"),
+  sizeOptions: document.getElementById("sizeOptions"),
+};
+
+// ---- build the grid-size picker (visual swatch + label per option) ----
+function buildSwatch(cfg) {
+  var swatch = document.createElement("div");
+  swatch.className = "swatch";
+  swatch.style.display = "grid";
+  swatch.style.gridTemplateColumns = "repeat(" + cfg.N + ", 1fr)";
+  swatch.style.gridTemplateRows = "repeat(" + cfg.N + ", 1fr)";
+  for (var r = 0; r < cfg.N; r++) {
+    for (var c = 0; c < cfg.N; c++) {
+      var cell = document.createElement("div");
+      cell.className = "swatch-cell";
+      if ((c + 1) % cfg.boxCols === 0 && c !== cfg.N - 1) cell.classList.add("thick-r");
+      if ((r + 1) % cfg.boxRows === 0 && r !== cfg.N - 1) cell.classList.add("thick-b");
+      swatch.appendChild(cell);
+    }
+  }
+  return swatch;
+}
+
+function buildSizeOptions() {
+  els.sizeOptions.innerHTML = "";
+  BOARD_ORDER.forEach(function (key, idx) {
+    var cfg = BOARD_CONFIGS[key];
+    var label = document.createElement("label");
+    label.className = "size-option" + (key === state.boardKey ? " active" : "");
+    var radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "boardSize";
+    radio.value = key;
+    radio.checked = key === state.boardKey;
+    radio.addEventListener("change", function () {
+      state.boardKey = key;
+      Array.from(els.sizeOptions.children).forEach(function (el) { el.classList.remove("active"); });
+      label.classList.add("active");
+      resetResults();
+    });
+    var textWrap = document.createElement("div");
+    textWrap.className = "text";
+    textWrap.innerHTML = "<b>" + cfg.label + " \u2014 " + cfg.boxLabel + "</b><span>" + cfg.sublabel + "</span>";
+    label.appendChild(radio);
+    label.appendChild(buildSwatch(cfg));
+    label.appendChild(textWrap);
+    els.sizeOptions.appendChild(label);
+  });
+}
+buildSizeOptions();
+
+function resetResults() {
+  state.puzzles = [];
+  els.downloadBtn.disabled = true;
+  els.statsRow.style.display = "none";
+  els.previewGrid.style.display = "none";
+  els.previewGrid.innerHTML = "";
+  els.emptyState.style.display = "flex";
+}
+
+function setProgress(current, total, difficulty) {
+  els.progressWrap.classList.add("active");
+  var pct = Math.round((current / total) * 100);
+  els.progressFill.style.width = pct + "%";
+  els.progressLabel.textContent = "Membuat puzzle " + current + " dari " + total + " (" + (DIFFICULTY_LABEL[difficulty] || difficulty) + ")\u2026";
+}
+
+function wait(fn) {
+  return new Promise(function (resolve) {
+    (window.requestAnimationFrame || setTimeout)(function () { resolve(fn && fn()); });
+  });
+}
+
+async function generateAll(boardKey, count, difficultyMode) {
+  var puzzles = [];
+  for (var i = 0; i < count; i++) {
+    var difficulty = pickDifficulty(difficultyMode, i);
+    var result = generatePuzzle(boardKey, difficulty);
+    puzzles.push({ number: i + 1, puzzle: result.puzzle, solution: result.solution, givens: result.givens, difficulty: difficulty });
+    setProgress(i + 1, count, difficulty);
+    await wait(); // yield to UI thread so the progress bar updates
+  }
+  return puzzles;
+}
+
+function buildMiniGrid(grid, cfg, fontScale) {
+  var wrap = document.createElement("div");
+  wrap.className = "mini-grid";
+  wrap.style.gridTemplateColumns = "repeat(" + cfg.N + ", 1fr)";
+  wrap.style.gridTemplateRows = "repeat(" + cfg.N + ", 1fr)";
+  // Preview font scales with the grid size (fewer cells = bigger numbers)
+  // and the user's chosen font-size option, so the on-screen preview
+  // matches what the exported PDF will actually look like.
+  var scale = FONT_SCALES[fontScale] || 1.0;
+  var basePx = Math.max(8, Math.min(26, Math.round((96 / cfg.N) * scale)));
+  for (var r = 0; r < cfg.N; r++) {
+    for (var c = 0; c < cfg.N; c++) {
+      var cell = document.createElement("div");
+      cell.className = "mini-cell";
+      cell.style.fontSize = basePx + "px";
+      cell.textContent = grid[r][c] === 0 ? "" : grid[r][c];
+      var rightThick = (c + 1) % cfg.boxCols === 0 && c !== cfg.N - 1;
+      var bottomThick = (r + 1) % cfg.boxRows === 0 && r !== cfg.N - 1;
+      cell.style.borderRight = c === cfg.N - 1 ? "none" : (rightThick ? "1.5px solid #262626" : "0.5px solid #d8d8d8");
+      cell.style.borderBottom = r === cfg.N - 1 ? "none" : (bottomThick ? "1.5px solid #262626" : "0.5px solid #d8d8d8");
+      wrap.appendChild(cell);
+    }
+  }
+  return wrap;
+}
+
+function renderStats(puzzles, perPage, includeSolutions, cfg) {
+  var counts = {};
+  puzzles.forEach(function (p) { counts[p.difficulty] = (counts[p.difficulty] || 0) + 1; });
+  var puzzlePages = Math.ceil(puzzles.length / perPage);
+  var totalPages = 1 + puzzlePages + (includeSolutions ? puzzlePages : 0);
+
+  var parts = [
+    "<div class=\"stat-chip\"><b>" + puzzles.length + "</b> puzzle</div>",
+    "<div class=\"stat-chip\">Ukuran: <b>" + cfg.label + "</b> (" + cfg.boxLabel + ")</div>",
+  ];
+  Object.keys(counts).forEach(function (d) {
+    parts.push("<div class=\"stat-chip\">" + (DIFFICULTY_LABEL[d] || d) + ": <b>" + counts[d] + "</b></div>");
+  });
+  parts.push("<div class=\"stat-chip\">~<b>" + totalPages + "</b> halaman PDF</div>");
+  els.statsRow.innerHTML = parts.join("");
+  els.statsRow.style.display = "flex";
+}
+
+var PREVIEW_LIMIT = 12;
+function renderPreview(puzzles, cfg, fontScale) {
+  els.emptyState.style.display = "none";
+  els.previewGrid.style.display = "grid";
+  els.previewGrid.innerHTML = "";
+  var shown = puzzles.slice(0, PREVIEW_LIMIT);
+  shown.forEach(function (p) {
+    var card = document.createElement("div");
+    card.className = "puzzle-card";
+    var head = document.createElement("div");
+    head.className = "puzzle-card-head";
+    head.innerHTML = "<span class=\"puzzle-num\">No. " + p.number + "</span><span class=\"puzzle-diff\">" + (DIFFICULTY_LABEL[p.difficulty] || p.difficulty) + "</span>";
+    card.appendChild(head);
+    card.appendChild(buildMiniGrid(p.puzzle, cfg, fontScale));
+    els.previewGrid.appendChild(card);
+  });
+  if (puzzles.length > PREVIEW_LIMIT) {
+    var note = document.createElement("div");
+    note.className = "more-note";
+    note.textContent = "+" + (puzzles.length - PREVIEW_LIMIT) + " puzzle lainnya akan disertakan dalam PDF";
+    els.previewGrid.appendChild(note);
+  }
+}
+
+function readOptions() {
+  return {
+    boardKey: state.boardKey,
+    title: els.bookTitle.value.trim() || "Kumpulan Sudoku",
+    subtitle: els.bookSubtitle.value.trim(),
+    count: Math.max(1, Math.min(300, parseInt(els.puzzleCount.value, 10) || 1)),
+    difficultyMode: els.difficulty.value,
+    perPage: parseInt(els.perPage.value, 10),
+    pageSize: els.pageSize.value,
+    fontScale: els.fontSize.value,
+    includeSolutions: els.includeSolutions.checked,
+  };
+}
+
+function difficultyText(mode) {
+  if (mode === "mixed") return "Campuran tingkat kesulitan";
+  return "Tingkat " + (DIFFICULTY_LABEL[mode] || mode);
+}
+
+async function handleGenerate() {
+  if (state.generating) return;
+  state.generating = true;
+  els.generateBtn.disabled = true;
+  els.downloadBtn.disabled = true;
+  els.progressWrap.classList.add("active");
+  els.progressFill.style.width = "0%";
+
+  var opts = readOptions();
+  await wait();
+  var puzzles = await generateAll(opts.boardKey, opts.count, opts.difficultyMode);
+
+  state.puzzles = puzzles;
+  state.generating = false;
+  els.generateBtn.disabled = false;
+  els.downloadBtn.disabled = false;
+  els.progressWrap.classList.remove("active");
+
+  var cfg = BOARD_CONFIGS[opts.boardKey];
+  renderStats(puzzles, opts.perPage, opts.includeSolutions, cfg);
+  renderPreview(puzzles, cfg, opts.fontScale);
+}
+
+function handleDownload() {
+  if (!state.puzzles.length) return;
+  var opts = readOptions();
+  var cfg = BOARD_CONFIGS[opts.boardKey];
+  var doc = buildBookPdf({
+    title: opts.title,
+    subtitle: opts.subtitle,
+    puzzles: state.puzzles,
+    perPage: opts.perPage,
+    pageSize: opts.pageSize,
+    fontScale: opts.fontScale,
+    includeSolutions: opts.includeSolutions,
+    difficultyText: difficultyText(opts.difficultyMode),
+    cfg: cfg,
+  });
+  var safeName = opts.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "sudoku-book";
+  doc.save(safeName + "-" + cfg.key + ".pdf");
+}
+
+els.generateBtn.addEventListener("click", handleGenerate);
+els.downloadBtn.addEventListener("click", handleDownload);
+</script>
+</body>
+</html>
